@@ -7,7 +7,8 @@
     },
     "channels": {
         "welcome": "1555297955869622312",
-        "logs": "1555297731289809047"
+        "botLogs": "1555297731289809047",
+        "rconLogs": "1555328236429385779"
     },
     "roles": {
         "autoroles": [
@@ -16,11 +17,16 @@
             "1554514054612131881"
         ],
         "blacklisted": "1554519144614076466",
-        "whitelisted": "1554513837137465475"
+        "whitelisted": "1554513837137465475",
+        "admin": "1554513894410555422"
     },
     "minecraft": {
         "javaIp": "rails-chin.tun.ply.gg",
         "bedrockIp": "rails-severely.tun.ply.gg",
         "bedrockPort": "3027"
+    },
+    "rcon": {
+        "host": "127.0.0.1",
+        "port": 25575
     }
 }

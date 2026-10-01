@@ -2,26 +2,34 @@
  * Utility module for custom formatted console logging with timestamps.
  */
 
-const formatTime = () => {
-    const now = new Date();
-    return now.toISOString().replace(/T/, ' ').replace(/\..+/, '');
-};
+const config = require('../../config.json');
+const { createEmbed } = require('./embedBuilder');
 
-const logger = {
-    info: (message) => {
-        console.log(`[${formatTime()}] [INFO] ${message}`);
-    },
-    warn: (message) => {
-        console.warn(`[${formatTime()}] [WARN] ${message}`);
-    },
-    error: (message, error = '') => {
-        console.error(`[${formatTime()}] [ERROR] ${message}`, error);
-    },
-    debug: (message) => {
-        if (process.env.NODE_ENV === 'development') {
-            console.log(`[${formatTime()}] [DEBUG] ${message}`);
+const sendToLogChannel = async (client, type, message) => {
+    const channelId = config.channels?.botLogs;
+    if (!client || !channelId) return;
+
+    try {
+        const logChannel = await client.channels.fetch(channelId);
+        if (logChannel) {
+            const embed = createEmbed({
+                type: type === 'error' ? 'error' : 'info',
+                title: type === 'error' ? 'Errore Bot' : 'Log di Sistema',
+                description: message
+            });
+            await logChannel.send({ embeds: [embed] });
         }
-    }
+    } catch { }
 };
 
-module.exports = logger;
+const info = (message, client = null) => {
+    console.log(`[INFO] ${message}`);
+    if (client) sendToLogChannel(client, 'info', message);
+};
+
+const error = (message, client = null) => {
+    console.error(`[ERROR] ${message}`);
+    if (client) sendToLogChannel(client, 'error', message);
+};
+
+module.exports = { info, error };

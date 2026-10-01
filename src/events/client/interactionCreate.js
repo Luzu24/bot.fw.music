@@ -3,32 +3,32 @@
  */
 
 const logger = require('../../utils/logger');
-const { createErrorEmbed } = require('../../utils/embedBuilder');
 
 module.exports = {
     name: 'interactionCreate',
-    once: false,
-    async execute(interaction, client) {
+    async execute(interaction) {
         if (!interaction.isChatInputCommand()) return;
 
-        const command = client.commands.get(interaction.commandName);
+        const command = interaction.client.commands.get(interaction.commandName);
 
-        if (!command) {
-            logger.warn(`No command matching ${interaction.commandName} was found.`);
-            return;
-        }
+        if (!command) return;
+
+        const options = interaction.options.data
+            .map(opt => `${opt.name}:${opt.value}`)
+            .join(', ');
+
+        const optionsText = options ? `{${options}}` : '';
+        logger.info(`${interaction.user} ha eseguito /${interaction.commandName}${optionsText}`.trim(), interaction.client);
 
         try {
-            await command.execute(interaction, client);
+            await command.execute(interaction);
         } catch (error) {
-            logger.error(`Error executing ${interaction.commandName}:`, error);
-
-            const errorEmbed = createErrorEmbed('Si è verificato un errore durante l\'esecuzione del comando.');
-
+            logger.error(`Errore durante l'esecuzione del comando /${interaction.commandName}:${error.message}`, interaction.client);
+            const content = 'Si è verificato un errore durante l\'esecuzione del comando.';
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ embeds: [errorEmbed], flags: 64 });
+                await interaction.followUp({ content, ephemeral: true });
             } else {
-                await interaction.reply({ embeds: [errorEmbed], flags: 64 });
+                await interaction.reply({ content, ephemeral: true });
             }
         }
     }
