@@ -1,14 +1,25 @@
 bot/
+├── node_modules/
+│   └── ...
+│
 ├── src/
 │   ├── commands/
+│   │   ├── admin/
+│   │   │   ├── blacklist.js        (incomplete)
+│   │   │   ├── unwhitelist.js      (incomplete)
+│   │   │   ├── whitelist.js
+│   │   │   └── whitelistList.js    (incomplete)
+│   │   │
 │   │   └── general/
+│   │       ├── help.js
+│   │       ├── ip.js
 │   │       ├── ping.js
-│   │       └── help.js
+│   │       └── status.js
 │   │
 │   ├── events/
 │   │   ├── client/
-│   │   │   ├── ready.js
-│   │   │   └── interactionCreate.js
+│   │   │   ├── interactionCreate.js
+│   │   │   └── ready.js
 │   │   └── guild/
 │   │       └── guildMemberAdd.js
 │   │
@@ -18,6 +29,7 @@ bot/
 │   │
 │   ├── utils/
 │   │   ├── embedBuilder.js
+│   │   ├── rcon.js
 │   │   └── logger.js
 │   │
 │   ├── deploy-commands.js
@@ -25,7 +37,7 @@ bot/
 │
 ├── .env
 ├── .gitignore
-├── bot.txt
+├── bot.txt                         (this file)
 ├── config.json
 ├── package-lock.json
 └── package.json
