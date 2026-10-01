@@ -1,0 +1,31 @@
+bot/
+├── src/
+│   ├── commands/
+│   │   └── general/
+│   │       ├── ping.js
+│   │       └── help.js
+│   │
+│   ├── events/
+│   │   ├── client/
+│   │   │   ├── ready.js
+│   │   │   └── interactionCreate.js
+│   │   └── guild/
+│   │       └── guildMemberAdd.js
+│   │
+│   ├── handlers/
+│   │   ├── commandHandler.js
+│   │   └── eventHandler.js
+│   │
+│   ├── utils/
+│   │   ├── embedBuilder.js
+│   │   └── logger.js
+│   │
+│   ├── deploy-commands.js
+│   └── index.js
+│
+├── .env
+├── .gitignore
+├── bot.txt
+├── config.json
+├── package-lock.json
+└── package.json
