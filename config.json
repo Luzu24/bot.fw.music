@@ -1,0 +1,26 @@
+{
+    "colors": {
+        "primary": "#5865F2",
+        "success": "#57F287",
+        "warning": "#FEE75C",
+        "error": "#ED4245"
+    },
+    "channels": {
+        "welcome": "1555297955869622312",
+        "logs": "1555297731289809047"
+    },
+    "roles": {
+        "autoroles": [
+            "1554514236862898297",
+            "1554514152813236375",
+            "1554514054612131881"
+        ],
+        "blacklisted": "1554519144614076466",
+        "whitelisted": "1554513837137465475"
+    },
+    "minecraft": {
+        "javaIp": " rails-chin.tun.ply.gg",
+        "bedrockIp": "rails-severely.tun.ply.gg",
+        "bedrockPort": "3027"
+    }
+}

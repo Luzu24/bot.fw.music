@@ -1,13 +1,21 @@
 {
-  "name": "bot",
-  "version": "1.0.0",
-  "description": "",
-  "main": "main.js",
+  "name": "bot.fw.music",
+  "version": "0.1.0-alpha",
+  "description": "Discord bot for Minecraft crossplay server management and community integration",
+  "main": "src/index.js",
   "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "minecraft",
+    "discord-bot",
+    "discordjs",
+    "crossplay",
+    "server-management"
+  ],
+  "author": "Luzu24",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
