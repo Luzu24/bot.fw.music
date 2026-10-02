@@ -27,6 +27,11 @@ const info = (message, client = null) => {
     if (client) sendToLogChannel(client, 'info', message);
 };
 
+const warn = (message, client = null) => {
+    console.warn(`[WARN] ${message}`);
+    if (client) sendToLogChannel(client, 'warn', message);
+};
+
 const error = (message, client = null) => {
     console.error(`[ERROR] ${message}`);
     if (client) sendToLogChannel(client, 'error', message);
