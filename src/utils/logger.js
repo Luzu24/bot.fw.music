@@ -37,4 +37,4 @@ const error = (message, client = null) => {
     if (client) sendToLogChannel(client, 'error', message);
 };
 
-module.exports = { info, error };
+module.exports = { info, warn, error };
