@@ -6,7 +6,7 @@ bot/
 │   ├── commands/
 │   │   ├── admin/
 │   │   │   ├── bl.js        (incomplete)
-│   │   │   ├── unwl.js      (incomplete)
+│   │   │   ├── unwl.js
 │   │   │   ├── wl.js
 │   │   │   └── wlList.js    (incomplete)
 │   │   │
