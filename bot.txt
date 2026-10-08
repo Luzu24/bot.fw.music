@@ -5,10 +5,10 @@ bot/
 ├── src/
 │   ├── commands/
 │   │   ├── admin/
-│   │   │   ├── bl.js        (incomplete)
+│   │   │   ├── bl.js
 │   │   │   ├── unwl.js
 │   │   │   ├── wl.js
-│   │   │   └── wlList.js    (incomplete)
+│   │   │   └── wlList.js
 │   │   │
 │   │   └── general/
 │   │       ├── help.js
