@@ -77,12 +77,12 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('ping')
         .setDescription('Mostra la latenza del bot e lo stato del server Minecraft'),
-    async execute(interaction, client) {
+    async execute(interaction) {
         const startTime = Date.now();
         await interaction.deferReply();
         const botLatency = Date.now() - startTime;
 
-        const rawWsPing = client.ws.ping;
+        const rawWsPing = interaction.client.ws.ping;
         const apiLatency = rawWsPing >= 0 ? `${Math.round(rawWsPing)} ms` : 'In calcolo...';
 
         const javaHost = config.minecraft.javaIp.trim();
