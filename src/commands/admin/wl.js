@@ -3,9 +3,32 @@
  */
 
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
 const { sendRconCommand } = require('../../utils/rcon');
+const logger = require('../../utils/logger');
+
+const dataPath = path.join(__dirname, '../../data/whitelisted.json');
+
+const saveToDatabase = (discordId, username, platform) => {
+    let data = {};
+    if (fs.existsSync(dataPath)) {
+        try {
+            data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+        } catch {
+            data = {};
+        }
+    } else {
+        const dir = path.dirname(dataPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+    }
+    data[discordId] = { username, platform };
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+};
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -26,6 +49,7 @@ module.exports = {
 
         const adminRoleId = config.roles?.admin;
         const whitelistedRoleId = config.roles?.whitelisted;
+        const unwhitelistedRoleId = config.roles?.unwhitelisted;
 
         if (adminRoleId && !interaction.member.roles.cache.has(adminRoleId)) {
             const embed = createEmbed({
@@ -89,15 +113,25 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         }
 
+        saveToDatabase(targetUser.id, username, platform);
+
         try {
+            logger.info(`[DEBUG WL] Attempting role update for ${targetUser.id}. WhitelistedRoleID: ${whitelistedRoleId}, UnwhitelistedRoleID:${unwhitelistedRoleId}`, interaction.client);
+
             if (whitelistedRoleId) {
                 await targetMember.roles.add(whitelistedRoleId);
+                logger.info(`[DEBUG WL] Added whitelisted role to ${targetUser.id}`, interaction.client);
             }
-        } catch {
+            if (unwhitelistedRoleId) {
+                await targetMember.roles.remove(unwhitelistedRoleId);
+                logger.info(`[DEBUG WL] Removed unwhitelisted role from ${targetUser.id}`, interaction.client);
+            }
+        } catch (roleError) {
+            logger.error(`[DEBUG WL ERROR] Role management failed: ${roleError.message}`, interaction.client);
             const embed = createEmbed({
                 type: 'warning',
                 title: 'Whitelist In-Game Completata',
-                description: `L'utente \`${username}\` (${platform}) è stato aggiunto alla whitelist del server, ma si è verificato un errore durante l'assegnazione del ruolo Discord.`
+                description: `L'utente \`${username}\` (${platform}) è stato aggiunto alla whitelist del server, ma si è verificato un errore durante la gestione dei ruoli Discord.`
             });
             return interaction.editReply({ embeds: [embed] });
         }

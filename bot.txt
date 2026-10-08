@@ -5,16 +5,19 @@ bot/
 ├── src/
 │   ├── commands/
 │   │   ├── admin/
-│   │   │   ├── blacklist.js        (incomplete)
-│   │   │   ├── unwhitelist.js      (incomplete)
-│   │   │   ├── whitelist.js
-│   │   │   └── whitelistList.js    (incomplete)
+│   │   │   ├── bl.js        (incomplete)
+│   │   │   ├── unwl.js      (incomplete)
+│   │   │   ├── wl.js
+│   │   │   └── wlList.js    (incomplete)
 │   │   │
 │   │   └── general/
 │   │       ├── help.js
 │   │       ├── ip.js
 │   │       ├── ping.js
 │   │       └── status.js
+│   │
+│   ├── data/
+│   │   └── whitelisted.json
 │   │
 │   ├── events/
 │   │   ├── client/
@@ -37,7 +40,7 @@ bot/
 │
 ├── .env
 ├── .gitignore
-├── bot.txt                         (this file)
+├── bot.txt                     (this file)
 ├── config.json
 ├── package-lock.json
 └── package.json
