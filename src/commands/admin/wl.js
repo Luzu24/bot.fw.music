@@ -3,31 +3,28 @@
  */
 
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
 const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
-const { sendRconCommand } = require('../../utils/rcon');
+const { sendRconCommand, isCommandRejected } = require('../../utils/rcon');
+const { getWhitelistCommand } = require('../../utils/minecraft');
+const { getWhitelistedData, saveWhitelistedUser, findWhitelistedUser, isBlacklisted } = require('../../utils/database');
+const { isAdmin, createAccessDeniedEmbed } = require('../../utils/permissions');
+const { toInlineText } = require('../../utils/formatters');
 const logger = require('../../utils/logger');
 
-const dataPath = path.join(__dirname, '../../data/whitelisted.json');
+const MOJANG_TIMEOUT = 5000;
 
-const saveToDatabase = (discordId, username, platform) => {
-    let data = {};
-    if (fs.existsSync(dataPath)) {
-        try {
-            data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-        } catch {
-            data = {};
-        }
-    } else {
-        const dir = path.dirname(dataPath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
+const detectPlatform = async (username) => {
+    try {
+        const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(username)}`, {
+            signal: AbortSignal.timeout(MOJANG_TIMEOUT)
+        });
+        if (response.status === 200) return 'Java';
+        if (response.status === 404 || response.status === 204) return 'Bedrock';
+        return null;
+    } catch {
+        return null;
     }
-    data[discordId] = { username, platform };
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 };
 
 module.exports = {
@@ -42,26 +39,28 @@ module.exports = {
         .addUserOption(option =>
             option.setName('discord')
                 .setDescription('Utente Discord da associare')
-                .setRequired(true)),
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('piattaforma')
+                .setDescription('Piattaforma del giocatore (se omessa viene rilevata automaticamente)')
+                .addChoices(
+                    { name: 'Java', value: 'Java' },
+                    { name: 'Bedrock', value: 'Bedrock' }
+                )),
 
     async execute(interaction) {
         await interaction.deferReply();
 
-        const adminRoleId = config.roles?.admin;
         const whitelistedRoleId = config.roles?.whitelisted;
         const unwhitelistedRoleId = config.roles?.unwhitelisted;
 
-        if (adminRoleId && !interaction.member.roles.cache.has(adminRoleId)) {
-            const embed = createEmbed({
-                type: 'error',
-                title: 'Accesso Negato',
-                description: 'Non hai i permessi necessari per eseguire questo comando.'
-            });
-            return interaction.editReply({ embeds: [embed] });
+        if (!isAdmin(interaction.member)) {
+            return interaction.editReply({ embeds: [createAccessDeniedEmbed()] });
         }
 
         const username = interaction.options.getString('username').trim();
         const targetUser = interaction.options.getUser('discord');
+        const selectedPlatform = interaction.options.getString('piattaforma');
 
         let targetMember;
         try {
@@ -84,25 +83,49 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        let isJava = false;
-        try {
-            const mojangResponse = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(username)}`);
-            if (mojangResponse.status === 200) {
-                isJava = true;
-            }
-        } catch {
-            isJava = false;
+        if (isBlacklisted(targetUser.id)) {
+            const embed = createEmbed({
+                type: 'error',
+                title: 'Utente in Blacklist',
+                description: `L'utente ${targetUser} è in blacklist. Rimuovilo prima con \`/unblacklist\`.`
+            });
+            return interaction.editReply({ embeds: [embed] });
         }
 
-        let platform = 'Bedrock';
-        let rconResult;
+        const existingEntry = getWhitelistedData()[targetUser.id];
 
-        if (isJava) {
-            platform = 'Java';
-            rconResult = await sendRconCommand(interaction.client, `whitelist add ${username}`, interaction.user);
-        } else {
-            rconResult = await sendRconCommand(interaction.client, `fwhitelist add ${username}`, interaction.user);
+        if (existingEntry) {
+            const embed = createEmbed({
+                type: 'warning',
+                title: 'Utente già Registrato',
+                description: `L'utente ${targetUser} risulta già associato a \`${existingEntry.username}\` (${existingEntry.platform}). Usa \`/unwhitelist\` prima di registrare un altro account.`
+            });
+            return interaction.editReply({ embeds: [embed] });
         }
+
+        const platform = selectedPlatform || await detectPlatform(username);
+
+        if (!platform) {
+            const embed = createEmbed({
+                type: 'error',
+                title: 'Piattaforma Non Rilevata',
+                description: 'Impossibile determinare automaticamente la piattaforma dell\'username. Riesegui il comando specificando l\'opzione `piattaforma`.'
+            });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        const duplicate = findWhitelistedUser(username, platform);
+
+        if (duplicate) {
+            const embed = createEmbed({
+                type: 'error',
+                title: 'Username Già Registrato',
+                description: `L'username \`${username}\` (${platform}) è già associato a <@${duplicate.discordId}>.`
+            });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        const rconResult = await sendRconCommand(interaction.client, getWhitelistCommand('add', username, platform), interaction.user);
 
         if (!rconResult.success) {
             const embed = createEmbed({
@@ -113,21 +136,26 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        saveToDatabase(targetUser.id, username, platform);
+        if (isCommandRejected(rconResult.response)) {
+            const embed = createEmbed({
+                type: 'error',
+                title: 'Comando Rifiutato',
+                description: `Il server ha rifiutato la richiesta per \`${username}\` (${platform}). Risposta della console: \`${toInlineText(rconResult.response, 200)}\``
+            });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        saveWhitelistedUser(targetUser.id, username, platform);
 
         try {
-            logger.info(`[DEBUG WL] Attempting role update for ${targetUser.id}. WhitelistedRoleID: ${whitelistedRoleId}, UnwhitelistedRoleID:${unwhitelistedRoleId}`, interaction.client);
-
             if (whitelistedRoleId) {
                 await targetMember.roles.add(whitelistedRoleId);
-                logger.info(`[DEBUG WL] Added whitelisted role to ${targetUser.id}`, interaction.client);
             }
             if (unwhitelistedRoleId) {
                 await targetMember.roles.remove(unwhitelistedRoleId);
-                logger.info(`[DEBUG WL] Removed unwhitelisted role from ${targetUser.id}`, interaction.client);
             }
         } catch (roleError) {
-            logger.error(`[DEBUG WL ERROR] Role management failed: ${roleError.message}`, interaction.client);
+            logger.error(`Role management failed while whitelisting ${targetUser.id}: ${roleError.message}`, interaction.client);
             const embed = createEmbed({
                 type: 'warning',
                 title: 'Whitelist In-Game Completata',
@@ -142,7 +170,7 @@ module.exports = {
             description: `L'utente \`${username}\` è stato aggiunto con successo alla whitelist!`,
             fields: [
                 { name: 'Minecraft Username', value: `\`${username}\``, inline: true },
-                { name: 'Piattaforma Rilevata', value: `\`${platform}\``, inline: true },
+                { name: selectedPlatform ? 'Piattaforma' : 'Piattaforma Rilevata', value: `\`${platform}\``, inline: true },
                 { name: 'Account Discord', value: `${targetUser}`, inline: true }
             ]
         });

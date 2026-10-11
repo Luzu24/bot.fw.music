@@ -12,9 +12,7 @@ const { loadEvents } = require('./handlers/eventHandler');
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMembers
   ]
 });
 
@@ -24,5 +22,5 @@ loadCommands(client);
 loadEvents(client);
 
 client.login(process.env.DISCORD_TOKEN).catch((error) => {
-  logger.error('Failed to log in to Discord:', error);
+  logger.error(`Failed to log in to Discord: ${error.message}`);
 });

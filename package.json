@@ -1,6 +1,6 @@
 {
   "name": "bot.fw.music",
-  "version": "0.1.0-alpha",
+  "version": "1.0.0-alpha",
   "description": "Discord bot for Minecraft crossplay server management and community integration",
   "main": "src/index.js",
   "scripts": {

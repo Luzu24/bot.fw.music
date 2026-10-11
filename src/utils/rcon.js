@@ -1,7 +1,25 @@
+/**
+ * Utility module for sending RCON commands to the Minecraft server and logging their results.
+ */
+
 const { Rcon } = require('rcon-client');
 const config = require('../../config.json');
 const { createEmbed } = require('./embedBuilder');
 const logger = require('./logger');
+const { truncateText } = require('./formatters');
+
+const MAX_LOGGED_RESPONSE_LENGTH = 1000;
+
+const REJECTION_PATTERNS = [
+    /does not exist/i,
+    /unknown or incomplete command/i,
+    /incorrect argument/i,
+    /no player was found/i,
+    /could not find/i,
+    /not found/i
+];
+
+const isCommandRejected = (response) => REJECTION_PATTERNS.some(pattern => pattern.test(response || ''));
 
 const sendRconCommand = async (client, command, executor) => {
     let rcon;
@@ -40,7 +58,7 @@ const sendRconCommand = async (client, command, executor) => {
                         { name: 'Comando Eseguito', value: `\`\`\`${command}\`\`\``, inline: false },
                         { name: 'Esecutore', value: executor ? `${executor}` : 'Sistema', inline: true },
                         { name: 'Esito', value: success ? 'Riuscito' : 'Fallito', inline: true },
-                        { name: 'Risposta Console', value: `\`\`\`${response || 'Nessuna risposta'}\`\`\``, inline: false }
+                        { name: 'Risposta Console', value: `\`\`\`${truncateText((response || 'Nessuna risposta').replace(/```/g, "'''"), MAX_LOGGED_RESPONSE_LENGTH)}\`\`\``, inline: false }
                     ]
                 });
                 await logChannel.send({ embeds: [embed] });
@@ -53,4 +71,4 @@ const sendRconCommand = async (client, command, executor) => {
     return { success, response };
 };
 
-module.exports = { sendRconCommand };
+module.exports = { sendRconCommand, isCommandRejected };

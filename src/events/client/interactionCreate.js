@@ -2,6 +2,7 @@
  * Event handler triggered when an interaction (slash command, button, etc.) is created.
  */
 
+const { MessageFlags } = require('discord.js');
 const logger = require('../../utils/logger');
 
 module.exports = {
@@ -26,9 +27,9 @@ module.exports = {
             logger.error(`Errore durante l'esecuzione del comando /${interaction.commandName}:${error.message}`, interaction.client);
             const content = 'Si è verificato un errore durante l\'esecuzione del comando.';
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content, ephemeral: true });
+                await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
             } else {
-                await interaction.reply({ content, ephemeral: true });
+                await interaction.reply({ content, flags: MessageFlags.Ephemeral });
             }
         }
     }

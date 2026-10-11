@@ -5,6 +5,9 @@
 const config = require('../../config.json');
 const { createEmbed } = require('./embedBuilder');
 
+const EMBED_TYPES = { error: 'error', warn: 'warning' };
+const EMBED_TITLES = { error: 'Errore Bot', warn: 'Avviso Bot' };
+
 const sendToLogChannel = async (client, type, message) => {
     const channelId = config.channels?.botLogs;
     if (!client || !channelId) return;
@@ -13,8 +16,8 @@ const sendToLogChannel = async (client, type, message) => {
         const logChannel = await client.channels.fetch(channelId);
         if (logChannel) {
             const embed = createEmbed({
-                type: type === 'error' ? 'error' : 'info',
-                title: type === 'error' ? 'Errore Bot' : 'Log di Sistema',
+                type: EMBED_TYPES[type] || 'info',
+                title: EMBED_TITLES[type] || 'Log di Sistema',
                 description: message
             });
             await logChannel.send({ embeds: [embed] });

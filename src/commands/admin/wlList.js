@@ -3,23 +3,12 @@
  */
 
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
-const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
-
-const dataPath = path.join(__dirname, '../../data/whitelisted.json');
+const { getWhitelistedData } = require('../../utils/database');
+const { isAdmin, createAccessDeniedEmbed } = require('../../utils/permissions');
+const { joinWithLimit } = require('../../utils/formatters');
 
 const MAX_DESCRIPTION_LENGTH = 4000;
-
-const getWhitelistedData = () => {
-    if (!fs.existsSync(dataPath)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch {
-        return {};
-    }
-};
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,15 +19,8 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        const adminRoleId = config.roles?.admin;
-
-        if (adminRoleId && !interaction.member.roles.cache.has(adminRoleId)) {
-            const embed = createEmbed({
-                type: 'error',
-                title: 'Accesso Negato',
-                description: 'Non hai i permessi necessari per eseguire questo comando.'
-            });
-            return interaction.editReply({ embeds: [embed] });
+        if (!isAdmin(interaction.member)) {
+            return interaction.editReply({ embeds: [createAccessDeniedEmbed()] });
         }
 
         const entries = Object.entries(getWhitelistedData());
@@ -56,20 +38,10 @@ module.exports = {
             `${index + 1}. \`${username}\` • \`${platform}\` • <@${discordId}>`
         );
 
-        let description = '';
-        let shown = 0;
-
-        for (const line of lines) {
-            const next = description ? `${description}\n${line}` : line;
-            if (next.length > MAX_DESCRIPTION_LENGTH) break;
-            description = next;
-            shown++;
-        }
-
-        const hidden = lines.length - shown;
-        if (hidden > 0) {
-            description += `\n\n...e altri ${hidden} utenti non mostrati.`;
-        }
+        const description = joinWithLimit(lines, {
+            maxLength: MAX_DESCRIPTION_LENGTH,
+            createSuffix: (hidden) => `\n\n...e altri ${hidden} utenti non mostrati.`
+        });
 
         const javaCount = entries.filter(([, userData]) => userData.platform === 'Java').length;
         const bedrockCount = entries.filter(([, userData]) => userData.platform === 'Bedrock').length;

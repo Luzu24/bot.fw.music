@@ -21,6 +21,7 @@ const loadCommands = (client) => {
             const command = require(filePath);
 
             if ('data' in command && 'execute' in command) {
+                command.category = folder;
                 client.commands.set(command.data.name, command);
                 logger.info(`Loaded command: ${command.data.name}`);
             } else {

@@ -6,17 +6,23 @@ bot/
 │   ├── commands/
 │   │   ├── admin/
 │   │   │   ├── bl.js
+│   │   │   ├── blList.js
+│   │   │   ├── unbl.js
 │   │   │   ├── unwl.js
+│   │   │   ├── whois.js
 │   │   │   ├── wl.js
-│   │   │   └── wlList.js
+│   │   │   ├── wlList.js
+│   │   │   └── wlSync.js
 │   │   │
 │   │   └── general/
 │   │       ├── help.js
 │   │       ├── ip.js
 │   │       ├── ping.js
+│   │       ├── players.js
 │   │       └── status.js
 │   │
 │   ├── data/
+│   │   ├── blacklisted.json
 │   │   └── whitelisted.json
 │   │
 │   ├── events/
@@ -24,23 +30,30 @@ bot/
 │   │   │   ├── interactionCreate.js
 │   │   │   └── ready.js
 │   │   └── guild/
-│   │       └── guildMemberAdd.js
+│   │       ├── guildMemberAdd.js
+│   │       └── guildMemberRemove.js
 │   │
 │   ├── handlers/
 │   │   ├── commandHandler.js
 │   │   └── eventHandler.js
 │   │
 │   ├── utils/
+│   │   ├── database.js
 │   │   ├── embedBuilder.js
-│   │   ├── rcon.js
-│   │   └── logger.js
+│   │   ├── formatters.js
+│   │   ├── logger.js
+│   │   ├── minecraft.js
+│   │   ├── permissions.js
+│   │   └── rcon.js
 │   │
 │   ├── deploy-commands.js
 │   └── index.js
 │
 ├── .env
+├── .env.example
 ├── .gitignore
 ├── bot.txt                     (this file)
 ├── config.json
 ├── package-lock.json
-└── package.json
+├── package.json
+└── README.md

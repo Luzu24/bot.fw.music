@@ -5,12 +5,22 @@
 const logger = require('../../utils/logger');
 const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
+const { isBlacklisted } = require('../../utils/database');
 
 module.exports = {
     name: 'guildMemberAdd',
     once: false,
     async execute(member, client) {
         try {
+            if (isBlacklisted(member.id)) {
+                const blacklistedRoleId = config.roles?.blacklisted;
+                if (blacklistedRoleId) {
+                    await member.roles.add(blacklistedRoleId);
+                }
+                logger.warn(`L'utente blacklistato ${member} è rientrato nel server: assegnato il ruolo blacklisted.`, client);
+                return;
+            }
+
             if (config.roles.autoroles && Array.isArray(config.roles.autoroles)) {
                 for (const roleId of config.roles.autoroles) {
                     const role = member.guild.roles.cache.get(roleId);
@@ -36,7 +46,7 @@ module.exports = {
                 logger.warn(`Welcome channel with ID ${config.channels.welcome} not found.`);
             }
         } catch (error) {
-            logger.error(`Error handling guildMemberAdd for ${member.user.tag}:`, error);
+            logger.error(`Error handling guildMemberAdd for ${member.user.tag}: ${error.message}`, client);
         }
     }
 };

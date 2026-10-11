@@ -3,31 +3,14 @@
  */
 
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
 const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
-const { sendRconCommand } = require('../../utils/rcon');
+const { sendRconCommand, isCommandRejected } = require('../../utils/rcon');
+const { getWhitelistCommand, getBanTarget } = require('../../utils/minecraft');
+const { getWhitelistedData, removeWhitelistedUser, saveBlacklistedUser, isBlacklisted } = require('../../utils/database');
+const { isAdmin, createAccessDeniedEmbed } = require('../../utils/permissions');
+const { toInlineText } = require('../../utils/formatters');
 const logger = require('../../utils/logger');
-
-const dataPath = path.join(__dirname, '../../data/whitelisted.json');
-
-const getWhitelistedData = () => {
-    if (!fs.existsSync(dataPath)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch {
-        return {};
-    }
-};
-
-const removeFromDatabase = (discordId) => {
-    const data = getWhitelistedData();
-    if (data[discordId]) {
-        delete data[discordId];
-        fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-    }
-};
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -42,21 +25,25 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        const adminRoleId = config.roles?.admin;
         const whitelistedRoleId = config.roles?.whitelisted;
         const unwhitelistedRoleId = config.roles?.unwhitelisted;
         const blacklistedRoleId = config.roles?.blacklisted;
 
-        if (adminRoleId && !interaction.member.roles.cache.has(adminRoleId)) {
+        if (!isAdmin(interaction.member)) {
+            return interaction.editReply({ embeds: [createAccessDeniedEmbed()] });
+        }
+
+        const targetUser = interaction.options.getUser('discord');
+
+        if (isBlacklisted(targetUser.id)) {
             const embed = createEmbed({
-                type: 'error',
-                title: 'Accesso Negato',
-                description: 'Non hai i permessi necessari per eseguire questo comando.'
+                type: 'warning',
+                title: 'Utente già in Blacklist',
+                description: `L'utente ${targetUser} è già presente nella blacklist.`
             });
             return interaction.editReply({ embeds: [embed] });
         }
 
-        const targetUser = interaction.options.getUser('discord');
         const data = getWhitelistedData();
         const userData = data[targetUser.id];
 
@@ -70,11 +57,8 @@ module.exports = {
         }
 
         const { username, platform } = userData;
-        const isJava = platform === 'Java';
-        const unwhitelistCommand = isJava ? `whitelist remove ${username}` : `fwhitelist remove ${username}`;
-        const banCommand = isJava ? `ban ${username}` : `ban .${username}`;
 
-        const unwhitelistResult = await sendRconCommand(interaction.client, unwhitelistCommand, interaction.user);
+        const unwhitelistResult = await sendRconCommand(interaction.client, getWhitelistCommand('remove', username, platform), interaction.user);
 
         if (!unwhitelistResult.success) {
             const embed = createEmbed({
@@ -85,7 +69,7 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        const banResult = await sendRconCommand(interaction.client, banCommand, interaction.user);
+        const banResult = await sendRconCommand(interaction.client, `ban ${getBanTarget(username, platform)}`, interaction.user);
 
         if (!banResult.success) {
             const embed = createEmbed({
@@ -96,7 +80,17 @@ module.exports = {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        removeFromDatabase(targetUser.id);
+        if (isCommandRejected(banResult.response)) {
+            const embed = createEmbed({
+                type: 'error',
+                title: 'Ban Rifiutato',
+                description: `L'utente \`${username}\` è stato rimosso dalla whitelist del server, ma il ban è stato rifiutato. Risposta della console: \`${toInlineText(banResult.response, 200)}\``
+            });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        saveBlacklistedUser(targetUser.id, { username, platform, blacklistedBy: interaction.user.id });
+        removeWhitelistedUser(targetUser.id);
 
         try {
             logger.info(`[DEBUG BL] Attempting role update for ${targetUser.id}. WhitelistedRoleID: ${whitelistedRoleId}, UnwhitelistedRoleID: ${unwhitelistedRoleId}, BlacklistedRoleID: ${blacklistedRoleId}`, interaction.client);
