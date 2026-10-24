@@ -5,6 +5,12 @@
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 require('dotenv').config();
 
+const result = dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+if (result.error) {
+  console.error(result.error.message);
+}
+
 const logger = require('./utils/logger');
 const { loadCommands } = require('./handlers/commandHandler');
 const { loadEvents } = require('./handlers/eventHandler');
