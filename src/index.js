@@ -12,6 +12,9 @@ if (result.error) {
   console.error(result.error.message);
 }
 
+console.log('dotenv parsed keys:', result.parsed ? Object.keys(result.parsed) : 'none');
+console.log('RCON_PASSWORD defined:', 'RCON_PASSWORD' in process.env, 'length:', (process.env.RCON_PASSWORD || '').length);
+
 const logger = require('./utils/logger');
 const { loadCommands } = require('./handlers/commandHandler');
 const { loadEvents } = require('./handlers/eventHandler');
