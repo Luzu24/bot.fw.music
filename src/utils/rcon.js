@@ -27,8 +27,8 @@ const sendRconCommand = async (client, command, executor) => {
     let success = false;
 
     try {
-        rcon = await Rcon.connect({
-            host: config.rcon?.host || '85.155.151.71',
+            rcon = await Rcon.connect({
+            host: config.rcon?.host || '127.0.0.1',
             port: parseInt(config.rcon?.port || 25575, 10),
             password: process.env.RCON_PASSWORD
         });
