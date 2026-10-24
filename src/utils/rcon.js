@@ -27,9 +27,16 @@ const sendRconCommand = async (client, command, executor) => {
     let success = false;
 
     try {
-            rcon = await Rcon.connect({
+        if (!process.env.RCON_PASSWORD) {
+            throw new Error('RCON_PASSWORD non configurata');
+        }
+
+        if (typeof command !== 'string' || !command) {
+            throw new Error('Comando RCON non valido');
+        }
+        rcon = await Rcon.connect({
             host: config.rcon?.host || '85.155.151.71',
-            port: parseInt(config.rcon?.port || 25575, 10),
+            port: parseInt(config.rcon?.port || 27587, 10),
             password: process.env.RCON_PASSWORD
         });
 
