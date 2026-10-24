@@ -13,3 +13,21 @@ if (result.error) {
 }
 
 const logger = require('./utils/logger');
+const { loadCommands } = require('./handlers/commandHandler');
+const { loadEvents } = require('./handlers/eventHandler');
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
+});
+
+client.commands = new Collection();
+
+loadCommands(client);
+loadEvents(client);
+
+client.login(process.env.DISCORD_TOKEN).catch((error) => {
+  logger.error(`Failed to log in to Discord: ${error.message}`);
+});
