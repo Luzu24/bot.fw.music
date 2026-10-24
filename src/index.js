@@ -2,8 +2,9 @@
  * Main entry point for starting the Discord bot client.
  */
 
+const path = require('path');
+const dotenv = require('dotenv');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
-require('dotenv').config();
 
 const result = dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
