@@ -8,9 +8,9 @@ const { createEmbed } = require('../../utils/embedBuilder');
 const { pingJava, pingBedrock } = require('../../utils/minecraft');
 
 const formatServerStatus = (status) => {
-    if (!status.online) return '🔴 Offline';
+    if (!status.online) return ':red_circle: Offline';
 
-    const parts = ['🟢 Online'];
+    const parts = [':green_circle: Online'];
     if (status.players) parts.push(`${status.players.online}/${status.players.max} giocatori`);
     if (status.version) parts.push(status.version);
 
@@ -32,8 +32,8 @@ module.exports = {
             type: isOnline ? 'success' : 'error',
             title: 'Stato del Server Minecraft',
             description: isOnline
-                ? '🟢 Il server è **Online**! Puoi connetterti usando gli indirizzi sottostanti.'
-                : '🔴 Il server è attualmente **Offline**.',
+                ? ':green_circle: Il server è **Online**! Puoi connetterti usando gli indirizzi sottostanti.'
+                : ':red_circle: Il server è attualmente **Offline**.',
             fields: [
                 { name: 'IP Java', value: `\`${config.minecraft.javaIp}\``, inline: false },
                 { name: 'IP Bedrock', value: `\`${config.minecraft.bedrockIp}\``, inline: true },
