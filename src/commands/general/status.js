@@ -8,6 +8,7 @@ const { createEmbed } = require('../../utils/embedBuilder');
 const { pingJava, pingBedrock } = require('../../utils/minecraft');
 
 const formatServerStatus = (status) => {
+    if (status.error === 'NOT_CONFIGURED') return ':white_circle: Non disponibile';
     if (!status.online) return ':red_circle: Offline';
 
     const parts = [':green_circle: Online'];

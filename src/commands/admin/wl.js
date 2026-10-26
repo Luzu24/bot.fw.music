@@ -10,6 +10,7 @@ const { getWhitelistCommand } = require('../../utils/minecraft');
 const { getWhitelistedData, saveWhitelistedUser, findWhitelistedUser, isBlacklisted } = require('../../utils/database');
 const { isAdmin, createAccessDeniedEmbed } = require('../../utils/permissions');
 const { toInlineText } = require('../../utils/formatters');
+const { syncNickname, describeNicknameResult } = require('../../utils/nickname');
 const logger = require('../../utils/logger');
 
 const MOJANG_TIMEOUT = 5000;
@@ -147,6 +148,8 @@ module.exports = {
 
         saveWhitelistedUser(targetUser.id, username, platform);
 
+        const nicknameResult = await syncNickname(targetMember, username, 'Nickname sincronizzato con lo username Minecraft');
+
         try {
             if (whitelistedRoleId) {
                 await targetMember.roles.add(whitelistedRoleId);
@@ -171,7 +174,8 @@ module.exports = {
             fields: [
                 { name: 'Minecraft Username', value: `\`${username}\``, inline: true },
                 { name: selectedPlatform ? 'Piattaforma' : 'Piattaforma Rilevata', value: `\`${platform}\``, inline: true },
-                { name: 'Account Discord', value: `${targetUser}`, inline: true }
+                { name: 'Account Discord', value: `${targetUser}`, inline: true },
+                { name: 'Nickname', value: describeNicknameResult(nicknameResult, username), inline: true }
             ]
         });
 

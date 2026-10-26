@@ -4,9 +4,12 @@
 
 const net = require('net');
 const dgram = require('dgram');
+const { Resolver } = require('dns').promises;
 const config = require('../../config.json');
 
 const DEFAULT_TIMEOUT = 3000;
+const SRV_LOOKUP_TIMEOUT = 2000;
+const HOSTNAME_PATTERN = /^[A-Za-z0-9.-]+$/;
 const DEFAULT_JAVA_PORT = 25565;
 const DEFAULT_BEDROCK_PORT = 19132;
 const DEFAULT_BEDROCK_PREFIX = '.';
@@ -77,10 +80,37 @@ const normalizeJavaStatus = (parsed) => ({
     motd: stripFormatting(flattenChat(parsed.description)).trim()
 });
 
-const pingJava = ({ host, port, timeout } = {}) => {
-    const targetHost = (host || config.minecraft.javaIp).trim();
-    const targetPort = port || parseInt(config.minecraft.javaPort, 10) || DEFAULT_JAVA_PORT;
+const isValidHost = (host) => HOSTNAME_PATTERN.test(host);
+
+const resolveJavaTarget = async (host, explicitPort) => {
+    if (explicitPort || net.isIP(host)) {
+        return { host, port: explicitPort || DEFAULT_JAVA_PORT };
+    }
+
+    try {
+        const resolver = new Resolver({ timeout: SRV_LOOKUP_TIMEOUT, tries: 1 });
+        const records = await resolver.resolveSrv(`_minecraft._tcp.${host}`);
+        if (records.length > 0) {
+            const [record] = [...records].sort((a, b) => a.priority - b.priority || b.weight - a.weight);
+            return { host: record.name, port: record.port };
+        }
+    } catch { }
+
+    return { host, port: DEFAULT_JAVA_PORT };
+};
+
+const pingJava = async ({ host, port, timeout } = {}) => {
+    const configuredHost = String(host || config.minecraft.javaIp || '').trim();
     const timeoutMs = timeout || DEFAULT_TIMEOUT;
+
+    if (!isValidHost(configuredHost)) {
+        return { online: false, latency: null, target: configuredHost, error: 'NOT_CONFIGURED' };
+    }
+
+    const originalHost = String(host || config.minecraft.pingHost || configuredHost).trim();
+    const explicitPort = port || parseInt(config.minecraft.javaPort, 10) || null;
+    const { host: connectHost, port: connectPort } = await resolveJavaTarget(originalHost, explicitPort);
+    const target = `${connectHost}:${connectPort}`;
 
     return new Promise((resolve) => {
         const socket = new net.Socket();
@@ -92,17 +122,17 @@ const pingJava = ({ host, port, timeout } = {}) => {
         let pongLatency = null;
         let settled = false;
 
-        const finish = () => {
+        const finish = (failure) => {
             if (settled) return;
             settled = true;
             socket.destroy();
 
             if (!status) {
-                resolve({ online: false, latency: null });
+                resolve({ online: false, latency: null, target, error: failure || 'NO_RESPONSE' });
                 return;
             }
 
-            resolve({ online: true, latency: pongLatency ?? statusLatency, ...status });
+            resolve({ online: true, latency: pongLatency ?? statusLatency, target, ...status });
         };
 
         const handlePacket = (packet) => {
@@ -132,13 +162,13 @@ const pingJava = ({ host, port, timeout } = {}) => {
 
         socket.setTimeout(timeoutMs);
 
-        socket.connect({ port: targetPort, host: targetHost, family: 4 }, () => {
+        socket.connect({ port: connectPort, host: connectHost, family: 4 }, () => {
             const portBuffer = Buffer.alloc(2);
-            portBuffer.writeUInt16BE(targetPort);
+            portBuffer.writeUInt16BE(connectPort);
 
             const handshake = createPacket(0x00, Buffer.concat([
                 writeVarInt(JAVA_PROTOCOL_VERSION),
-                writeString(targetHost),
+                writeString(originalHost),
                 portBuffer,
                 writeVarInt(1)
             ]));
@@ -161,13 +191,13 @@ const pingJava = ({ host, port, timeout } = {}) => {
                     handlePacket(packet);
                 }
             } catch {
-                finish();
+                finish('INVALID_RESPONSE');
             }
         });
 
-        socket.on('error', finish);
-        socket.on('timeout', finish);
-        socket.on('close', finish);
+        socket.on('error', (error) => finish(error.code || 'ERROR'));
+        socket.on('timeout', () => finish('TIMEOUT'));
+        socket.on('close', () => finish());
     });
 };
 
@@ -188,9 +218,15 @@ const parseBedrockPong = (message) => {
 };
 
 const pingBedrock = ({ host, port, timeout } = {}) => {
-    const targetHost = (host || config.minecraft.bedrockIp).trim();
+    const configuredHost = String(host || config.minecraft.bedrockIp || '').trim();
+    const targetHost = String(host || config.minecraft.pingHost || configuredHost).trim();
     const targetPort = port || parseInt(config.minecraft.bedrockPort, 10) || DEFAULT_BEDROCK_PORT;
     const timeoutMs = timeout || DEFAULT_TIMEOUT;
+    const target = `${targetHost}:${targetPort}`;
+
+    if (!isValidHost(configuredHost)) {
+        return Promise.resolve({ online: false, latency: null, target, error: 'NOT_CONFIGURED' });
+    }
 
     return new Promise((resolve) => {
         const socket = dgram.createSocket('udp4');
@@ -205,19 +241,19 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
             try {
                 socket.close();
             } catch { }
-            resolve(result);
+            resolve({ target, ...result });
         };
 
-        timer = setTimeout(() => finish({ online: false, latency: null }), timeoutMs);
+        timer = setTimeout(() => finish({ online: false, latency: null, error: 'TIMEOUT' }), timeoutMs);
 
         socket.on('message', (message) => {
             finish({ online: true, latency: Date.now() - startedAt, ...parseBedrockPong(message) });
         });
 
-        socket.on('error', () => finish({ online: false, latency: null }));
+        socket.on('error', (error) => finish({ online: false, latency: null, error: error.code || 'ERROR' }));
 
         socket.send(BEDROCK_PING_PACKET, 0, BEDROCK_PING_PACKET.length, targetPort, targetHost, (error) => {
-            if (error) finish({ online: false, latency: null });
+            if (error) finish({ online: false, latency: null, error: error.code || 'ERROR' });
         });
     });
 };
@@ -231,7 +267,7 @@ const getWhitelistCommand = (action, username, platform) => (
 );
 
 const parsePlayerList = (response) => {
-    const match = /(\d+)\s*(?:of a max of|\/)\s*(\d+)\s*players?\s*online:?\s*([\s\S]*)/i.exec(stripFormatting(response || ''));
+    const match = /(\d+)\D+?(\d+)\s*players?\s*online[.:]?\s*([\s\S]*)/i.exec(stripFormatting(response || ''));
     if (!match) return null;
 
     return {

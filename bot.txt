@@ -7,6 +7,7 @@ bot/
 │   │   ├── admin/
 │   │   │   ├── bl.js
 │   │   │   ├── blList.js
+│   │   │   ├── syncNick.js
 │   │   │   ├── unbl.js
 │   │   │   ├── unwl.js
 │   │   │   ├── whois.js
@@ -22,6 +23,7 @@ bot/
 │   │       └── status.js
 │   │
 │   ├── data/
+│   │   ├── backups/
 │   │   ├── blacklisted.json
 │   │   └── whitelisted.json
 │   │
@@ -43,6 +45,7 @@ bot/
 │   │   ├── formatters.js
 │   │   ├── logger.js
 │   │   ├── minecraft.js
+│   │   ├── nickname.js
 │   │   ├── permissions.js
 │   │   └── rcon.js
 │   │

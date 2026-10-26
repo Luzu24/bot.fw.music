@@ -25,9 +25,5 @@
         "javaIp": "minecraftfwmusic.vexogame.eu",
         "bedrockIp": "temporaneamente disabilitato",
         "bedrockPort": "temporaneamente disabilitato"
-    },
-    "rcon": {
-        "host": "85.155.151.71",
-        "port": 27587
     }
 }

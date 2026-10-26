@@ -2,3 +2,6 @@ node_modules/
 .env
 whitelisted.json
 blacklisted.json
+backups/
+*.corrupt-*
+*.tmp

@@ -6,7 +6,8 @@ const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/embedBuilder');
 const { sendRconCommand } = require('../../utils/rcon');
 const { pingJava, parsePlayerList } = require('../../utils/minecraft');
-const { joinWithLimit } = require('../../utils/formatters');
+const { joinWithLimit, toInlineText } = require('../../utils/formatters');
+const logger = require('../../utils/logger');
 
 const MAX_DESCRIPTION_LENGTH = 4000;
 
@@ -24,8 +25,10 @@ module.exports = {
             playerData = parsePlayerList(rconResult.response);
         }
 
+        let javaStatus = null;
+
         if (!playerData) {
-            const javaStatus = await pingJava();
+            javaStatus = await pingJava();
             if (javaStatus.online && javaStatus.players) {
                 playerData = {
                     online: javaStatus.players.online,
@@ -36,6 +39,9 @@ module.exports = {
         }
 
         if (!playerData) {
+            const rconReason = rconResult.success ? 'returned an unreadable response' : 'failed';
+            logger.warn(`/players failed: RCON ${rconReason} (${toInlineText(rconResult.response, 150)}); server ping to ${javaStatus.target} ${javaStatus.error ? `failed: ${javaStatus.error}` : 'returned no player data'}.`);
+
             const embed = createEmbed({
                 type: 'error',
                 title: 'Server Offline',
