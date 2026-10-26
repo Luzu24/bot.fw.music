@@ -6,9 +6,11 @@ const net = require('net');
 const dgram = require('dgram');
 const { Resolver } = require('dns').promises;
 const config = require('../../config.json');
+const logger = require('./logger');
 
 const DEFAULT_TIMEOUT = 3000;
 const SRV_LOOKUP_TIMEOUT = 2000;
+const JAVA_PING_SAMPLES = 5;
 const HOSTNAME_PATTERN = /^[A-Za-z0-9.-]+$/;
 const DEFAULT_JAVA_PORT = 25565;
 const DEFAULT_BEDROCK_PORT = 19132;
@@ -32,6 +34,16 @@ const SMALL_CAPS = {
 };
 const SMALL_CAPS_PATTERN = new RegExp(`[${Object.keys(SMALL_CAPS).join('')}]`, 'g');
 const OFFLINE_VERSION_PATTERN = /\boffline\b/;
+
+const now = () => Number(process.hrtime.bigint()) / 1e6;
+
+const roundLatency = (milliseconds) => Math.round(milliseconds * 10) / 10;
+
+const median = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
 
 const normalizeText = (text) => stripFormatting(text).replace(SMALL_CAPS_PATTERN, (char) => SMALL_CAPS[char]).toLowerCase();
 
@@ -111,6 +123,101 @@ const resolveJavaTarget = async (host, explicitPort) => {
     return { host, port: DEFAULT_JAVA_PORT };
 };
 
+const requestJavaStatus = ({ originalHost, connectHost, connectPort, target, timeoutMs }) => new Promise((resolve) => {
+    const socket = new net.Socket();
+    let buffer = Buffer.alloc(0);
+    let status = null;
+    let startedAt = 0;
+    let pingSentAt = 0;
+    let statusLatency = null;
+    let pongLatency = null;
+    let settled = false;
+
+    const finish = (failure) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+
+        if (!status) {
+            resolve({ online: false, latency: null, target, error: failure || 'NO_RESPONSE' });
+            return;
+        }
+
+        resolve({ online: true, latency: pongLatency ?? statusLatency, measured: pongLatency !== null, target, ...status });
+    };
+
+    const handlePacket = (packet) => {
+        const id = readVarInt(packet);
+        if (!id) return;
+
+        if (id.value === 0x00 && !status) {
+            const length = readVarInt(packet, id.size);
+            if (!length) return;
+            const start = id.size + length.size;
+            const json = packet.subarray(start, start + length.value).toString('utf8');
+            const parsedStatus = normalizeJavaStatus(JSON.parse(json));
+
+            if (isOfflinePlaceholder(parsedStatus)) {
+                finish('SERVER_OFFLINE');
+                return;
+            }
+
+            status = parsedStatus;
+            statusLatency = now() - startedAt;
+
+            const payload = Buffer.alloc(8);
+            payload.writeBigInt64BE(BigInt(Date.now()));
+            pingSentAt = now();
+            socket.write(createPacket(0x01, payload));
+            return;
+        }
+
+        if (id.value === 0x01) {
+            pongLatency = now() - pingSentAt;
+            finish();
+        }
+    };
+
+    socket.setTimeout(timeoutMs);
+
+    socket.connect({ port: connectPort, host: connectHost, family: 4 }, () => {
+        const portBuffer = Buffer.alloc(2);
+        portBuffer.writeUInt16BE(connectPort);
+
+        const handshake = createPacket(0x00, Buffer.concat([
+            writeVarInt(JAVA_PROTOCOL_VERSION),
+            writeString(originalHost),
+            portBuffer,
+            writeVarInt(1)
+        ]));
+
+        startedAt = now();
+        socket.write(handshake);
+        socket.write(createPacket(0x00, Buffer.alloc(0)));
+    });
+
+    socket.on('data', (chunk) => {
+        buffer = Buffer.concat([buffer, chunk]);
+
+        try {
+            while (!settled) {
+                const length = readVarInt(buffer);
+                if (!length || buffer.length < length.size + length.value) break;
+
+                const packet = buffer.subarray(length.size, length.size + length.value);
+                buffer = buffer.subarray(length.size + length.value);
+                handlePacket(packet);
+            }
+        } catch {
+            finish('INVALID_RESPONSE');
+        }
+    });
+
+    socket.on('error', (error) => finish(error.code || 'ERROR'));
+    socket.on('timeout', () => finish('TIMEOUT'));
+    socket.on('close', () => finish());
+});
+
 const pingJava = async ({ host, port, timeout } = {}) => {
     const configuredHost = String(host || config.minecraft.javaIp || '').trim();
     const timeoutMs = timeout || DEFAULT_TIMEOUT;
@@ -122,102 +229,22 @@ const pingJava = async ({ host, port, timeout } = {}) => {
     const originalHost = String(host || config.minecraft.pingHost || configuredHost).trim();
     const explicitPort = port || parseInt(config.minecraft.javaPort, 10) || null;
     const { host: connectHost, port: connectPort } = await resolveJavaTarget(originalHost, explicitPort);
-    const target = `${connectHost}:${connectPort}`;
+    const request = { originalHost, connectHost, connectPort, target: `${connectHost}:${connectPort}`, timeoutMs };
 
-    return new Promise((resolve) => {
-        const socket = new net.Socket();
-        let buffer = Buffer.alloc(0);
-        let status = null;
-        let startedAt = 0;
-        let pingSentAt = 0;
-        let statusLatency = null;
-        let pongLatency = null;
-        let settled = false;
+    const { measured, ...first } = await requestJavaStatus(request);
+    if (!first.online) return first;
+    if (!measured) return { ...first, latency: roundLatency(first.latency) };
 
-        const finish = (failure) => {
-            if (settled) return;
-            settled = true;
-            socket.destroy();
+    const samples = [first.latency];
+    const deadline = now() + timeoutMs;
 
-            if (!status) {
-                resolve({ online: false, latency: null, target, error: failure || 'NO_RESPONSE' });
-                return;
-            }
+    while (samples.length < JAVA_PING_SAMPLES && now() < deadline) {
+        const next = await requestJavaStatus(request);
+        if (!next.online || !next.measured) break;
+        samples.push(next.latency);
+    }
 
-            resolve({ online: true, latency: pongLatency ?? statusLatency, target, ...status });
-        };
-
-        const handlePacket = (packet) => {
-            const id = readVarInt(packet);
-            if (!id) return;
-
-            if (id.value === 0x00 && !status) {
-                const length = readVarInt(packet, id.size);
-                if (!length) return;
-                const start = id.size + length.size;
-                const json = packet.subarray(start, start + length.value).toString('utf8');
-                const parsedStatus = normalizeJavaStatus(JSON.parse(json));
-
-                if (isOfflinePlaceholder(parsedStatus)) {
-                    finish('SERVER_OFFLINE');
-                    return;
-                }
-
-                status = parsedStatus;
-                statusLatency = Date.now() - startedAt;
-
-                const payload = Buffer.alloc(8);
-                payload.writeBigInt64BE(BigInt(Date.now()));
-                pingSentAt = Date.now();
-                socket.write(createPacket(0x01, payload));
-                return;
-            }
-
-            if (id.value === 0x01) {
-                pongLatency = Date.now() - pingSentAt;
-                finish();
-            }
-        };
-
-        socket.setTimeout(timeoutMs);
-
-        socket.connect({ port: connectPort, host: connectHost, family: 4 }, () => {
-            const portBuffer = Buffer.alloc(2);
-            portBuffer.writeUInt16BE(connectPort);
-
-            const handshake = createPacket(0x00, Buffer.concat([
-                writeVarInt(JAVA_PROTOCOL_VERSION),
-                writeString(originalHost),
-                portBuffer,
-                writeVarInt(1)
-            ]));
-
-            startedAt = Date.now();
-            socket.write(handshake);
-            socket.write(createPacket(0x00, Buffer.alloc(0)));
-        });
-
-        socket.on('data', (chunk) => {
-            buffer = Buffer.concat([buffer, chunk]);
-
-            try {
-                while (!settled) {
-                    const length = readVarInt(buffer);
-                    if (!length || buffer.length < length.size + length.value) break;
-
-                    const packet = buffer.subarray(length.size, length.size + length.value);
-                    buffer = buffer.subarray(length.size + length.value);
-                    handlePacket(packet);
-                }
-            } catch {
-                finish('INVALID_RESPONSE');
-            }
-        });
-
-        socket.on('error', (error) => finish(error.code || 'ERROR'));
-        socket.on('timeout', () => finish('TIMEOUT'));
-        socket.on('close', () => finish());
-    });
+    return { ...first, latency: roundLatency(median(samples)) };
 };
 
 const parseBedrockPong = (message) => {
@@ -238,8 +265,8 @@ const parseBedrockPong = (message) => {
 
 const pingBedrock = ({ host, port, timeout } = {}) => {
     const configuredHost = String(host || config.minecraft.bedrockIp || '').trim();
-    const targetHost = String(host || config.minecraft.pingHost || configuredHost).trim();
-    const targetPort = port || parseInt(config.minecraft.bedrockPort, 10) || DEFAULT_BEDROCK_PORT;
+    const targetHost = String(host || config.minecraft.bedrockPingHost || config.minecraft.pingHost || configuredHost).trim();
+    const targetPort = port || parseInt(config.minecraft.bedrockPingPort, 10) || parseInt(config.minecraft.bedrockPort, 10) || DEFAULT_BEDROCK_PORT;
     const timeoutMs = timeout || DEFAULT_TIMEOUT;
     const target = `${targetHost}:${targetPort}`;
 
@@ -249,7 +276,7 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
 
     return new Promise((resolve) => {
         const socket = dgram.createSocket('udp4');
-        const startedAt = Date.now();
+        const startedAt = now();
         let timer = null;
         let settled = false;
 
@@ -266,7 +293,7 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
         timer = setTimeout(() => finish({ online: false, latency: null, error: 'TIMEOUT' }), timeoutMs);
 
         socket.on('message', (message) => {
-            finish({ online: true, latency: Date.now() - startedAt, ...parseBedrockPong(message) });
+            finish({ online: true, latency: roundLatency(now() - startedAt), ...parseBedrockPong(message) });
         });
 
         socket.on('error', (error) => finish({ online: false, latency: null, error: error.code || 'ERROR' }));
@@ -275,6 +302,11 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
             if (error) finish({ online: false, latency: null, error: error.code || 'ERROR' });
         });
     });
+};
+
+const logPingFailure = (source, name, status) => {
+    if (status.online || status.error === 'NOT_CONFIGURED') return;
+    logger.warn(`${source}: ${name} check failed at ${status.target}: ${status.error}.`);
 };
 
 const getBedrockPrefix = () => config.minecraft?.bedrockPrefix || DEFAULT_BEDROCK_PREFIX;
@@ -309,6 +341,7 @@ const parseWhitelist = (response) => {
 module.exports = {
     pingJava,
     pingBedrock,
+    logPingFailure,
     getBanTarget,
     getWhitelistCommand,
     parsePlayerList,

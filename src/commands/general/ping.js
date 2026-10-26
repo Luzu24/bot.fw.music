@@ -4,10 +4,10 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const { createEmbed } = require('../../utils/embedBuilder');
-const { pingJava, pingBedrock } = require('../../utils/minecraft');
+const { pingJava, pingBedrock, logPingFailure } = require('../../utils/minecraft');
 
 const formatLatency = (status) => {
-    if (status.online) return `${status.latency} ms`;
+    if (status.online) return `${status.latency < 10 ? status.latency.toFixed(1) : Math.round(status.latency)} ms`;
     return status.error === 'NOT_CONFIGURED' ? 'Non disponibile' : 'Offline';
 };
 
@@ -24,6 +24,8 @@ module.exports = {
         const apiLatency = rawWsPing >= 0 ? `${Math.round(rawWsPing)} ms` : 'In calcolo...';
 
         const [javaStatus, bedrockStatus] = await Promise.all([pingJava(), pingBedrock()]);
+        logPingFailure('/ping', 'Java', javaStatus);
+        logPingFailure('/ping', 'Bedrock', bedrockStatus);
 
         const javaStatusText = formatLatency(javaStatus);
         const bedrockStatusText = formatLatency(bedrockStatus);

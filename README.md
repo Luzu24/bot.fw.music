@@ -36,6 +36,7 @@ Discord bot for Minecraft crossplay (Java + Bedrock) server management and commu
 | `minecraft.pingHost` | Optional host used only for status checks, for when the public address is not reachable from the bot's machine |
 | `minecraft.bedrockIp` | Bedrock server address shown to players. If it is not a valid host name (for example a placeholder text), Bedrock checks are skipped |
 | `minecraft.bedrockPort` | Bedrock server port, defaults to `19132` |
+| `minecraft.bedrockPingHost`, `minecraft.bedrockPingPort` | Optional address and port used only for the Bedrock status check, for when the public one is not reachable from the bot's machine |
 | `minecraft.bedrockPrefix` | Optional Floodgate username prefix, defaults to `.` |
 | `rcon.host`, `rcon.port` | RCON connection |
 

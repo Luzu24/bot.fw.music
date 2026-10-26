@@ -26,11 +26,11 @@ module.exports = {
             serverStates[name] = state;
 
             if (status.online) {
-                logger.info(`${name} server is reachable at ${status.target}.`);
+                logger.info(`${name} server is reachable at ${status.target}.`, client);
             } else if (status.error === 'NOT_CONFIGURED') {
                 logger.info(`${name} server address is not configured: status checks are skipped.`);
             } else {
-                logger.warn(`${name} server is unreachable at ${status.target}: ${status.error}.`);
+                logger.warn(`${name} server is unreachable at ${status.target}: ${status.error}.`, client);
             }
         };
 
