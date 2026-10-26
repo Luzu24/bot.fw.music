@@ -25,6 +25,16 @@ const BEDROCK_PING_PACKET = Buffer.from([
 
 const stripFormatting = (text) => text.replace(/§[0-9a-fk-or]/gi, '');
 
+const SMALL_CAPS = {
+    'ᴀ': 'a', 'ʙ': 'b', 'ᴄ': 'c', 'ᴅ': 'd', 'ᴇ': 'e', 'ꜰ': 'f', 'ɢ': 'g', 'ʜ': 'h', 'ɪ': 'i',
+    'ᴊ': 'j', 'ᴋ': 'k', 'ʟ': 'l', 'ᴍ': 'm', 'ɴ': 'n', 'ᴏ': 'o', 'ᴘ': 'p', 'ǫ': 'q', 'ʀ': 'r',
+    'ꜱ': 's', 'ᴛ': 't', 'ᴜ': 'u', 'ᴠ': 'v', 'ᴡ': 'w', 'ʏ': 'y', 'ᴢ': 'z'
+};
+const SMALL_CAPS_PATTERN = new RegExp(`[${Object.keys(SMALL_CAPS).join('')}]`, 'g');
+const OFFLINE_VERSION_PATTERN = /\boffline\b/;
+
+const normalizeText = (text) => stripFormatting(text).replace(SMALL_CAPS_PATTERN, (char) => SMALL_CAPS[char]).toLowerCase();
+
 const writeVarInt = (value) => {
     const bytes = [];
     let current = value >>> 0;
@@ -76,9 +86,11 @@ const normalizeJavaStatus = (parsed) => ({
         max: parsed.players?.max ?? 0,
         sample: (parsed.players?.sample || []).map(player => player.name)
     },
-    version: parsed.version?.name ?? null,
+    version: stripFormatting(parsed.version?.name ?? '').trim() || null,
     motd: stripFormatting(flattenChat(parsed.description)).trim()
 });
+
+const isOfflinePlaceholder = (status) => status.players.max === 0 || OFFLINE_VERSION_PATTERN.test(normalizeText(status.version || ''));
 
 const isValidHost = (host) => HOSTNAME_PATTERN.test(host);
 
@@ -144,7 +156,14 @@ const pingJava = async ({ host, port, timeout } = {}) => {
                 if (!length) return;
                 const start = id.size + length.size;
                 const json = packet.subarray(start, start + length.value).toString('utf8');
-                status = normalizeJavaStatus(JSON.parse(json));
+                const parsedStatus = normalizeJavaStatus(JSON.parse(json));
+
+                if (isOfflinePlaceholder(parsedStatus)) {
+                    finish('SERVER_OFFLINE');
+                    return;
+                }
+
+                status = parsedStatus;
                 statusLatency = Date.now() - startedAt;
 
                 const payload = Buffer.alloc(8);
