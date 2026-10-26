@@ -23,7 +23,7 @@
     },
     "minecraft": {
         "javaIp": "minecraftfwmusic.vexogame.eu",
-        "bedrockIp": "temporaneamente disabilitato",
-        "bedrockPort": "temporaneamente disabilitato"
+        "bedrockIp": "minecraftfwmusic.vexogame.eu",
+        "bedrockPort": "28587"
     }
 }
