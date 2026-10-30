@@ -10,7 +10,6 @@ const logger = require('./logger');
 
 const DEFAULT_TIMEOUT = 3000;
 const SRV_LOOKUP_TIMEOUT = 2000;
-const JAVA_PING_SAMPLES = 5;
 const HOSTNAME_PATTERN = /^[A-Za-z0-9.-]+$/;
 const DEFAULT_JAVA_PORT = 25565;
 const DEFAULT_BEDROCK_PORT = 19132;
@@ -38,12 +37,6 @@ const OFFLINE_VERSION_PATTERN = /\boffline\b/;
 const now = () => Number(process.hrtime.bigint()) / 1e6;
 
 const roundLatency = (milliseconds) => Math.round(milliseconds * 10) / 10;
-
-const median = (values) => {
-    const sorted = [...values].sort((a, b) => a - b);
-    const middle = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-};
 
 const normalizeText = (text) => stripFormatting(text).replace(SMALL_CAPS_PATTERN, (char) => SMALL_CAPS[char]).toLowerCase();
 
@@ -143,7 +136,7 @@ const requestJavaStatus = ({ originalHost, connectHost, connectPort, target, tim
             return;
         }
 
-        resolve({ online: true, latency: pongLatency ?? statusLatency, measured: pongLatency !== null, target, ...status });
+        resolve({ online: true, latency: pongLatency ?? statusLatency, target, ...status });
     };
 
     const handlePacket = (packet) => {
@@ -231,20 +224,8 @@ const pingJava = async ({ host, port, timeout } = {}) => {
     const { host: connectHost, port: connectPort } = await resolveJavaTarget(originalHost, explicitPort);
     const request = { originalHost, connectHost, connectPort, target: `${connectHost}:${connectPort}`, timeoutMs };
 
-    const { measured, ...first } = await requestJavaStatus(request);
-    if (!first.online) return first;
-    if (!measured) return { ...first, latency: roundLatency(first.latency) };
-
-    const samples = [first.latency];
-    const deadline = now() + timeoutMs;
-
-    while (samples.length < JAVA_PING_SAMPLES && now() < deadline) {
-        const next = await requestJavaStatus(request);
-        if (!next.online || !next.measured) break;
-        samples.push(next.latency);
-    }
-
-    return { ...first, latency: roundLatency(median(samples)) };
+    const result = await requestJavaStatus(request);
+    return result.online ? { ...result, latency: roundLatency(result.latency) } : result;
 };
 
 const parseBedrockPong = (message) => {

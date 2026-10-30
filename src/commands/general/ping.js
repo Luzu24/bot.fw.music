@@ -3,12 +3,21 @@
  */
 
 const { SlashCommandBuilder } = require('discord.js');
+const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
 const { pingJava, pingBedrock, logPingFailure } = require('../../utils/minecraft');
+const { measurePlayerPing, logProbeFailure, getProbeCountry, describeCountry } = require('../../utils/probe');
 
-const formatLatency = (status) => {
-    if (status.online) return `${status.latency < 10 ? status.latency.toFixed(1) : Math.round(status.latency)} ms`;
-    return status.error === 'NOT_CONFIGURED' ? 'Non disponibile' : 'Offline';
+const splitTarget = (target) => {
+    const separatorIndex = target.lastIndexOf(':');
+    return { host: target.slice(0, separatorIndex), port: parseInt(target.slice(separatorIndex + 1), 10) };
+};
+
+const formatPlayerPing = (status, probe) => {
+    if (status.error === 'NOT_CONFIGURED') return 'Non disponibile';
+    if (!status.online) return 'Offline';
+    if (!probe || probe.error) return 'Non disponibile';
+    return `${Math.round(probe.latency)} ms`;
 };
 
 module.exports = {
@@ -27,8 +36,17 @@ module.exports = {
         logPingFailure('/ping', 'Java', javaStatus);
         logPingFailure('/ping', 'Bedrock', bedrockStatus);
 
-        const javaStatusText = formatLatency(javaStatus);
-        const bedrockStatusText = formatLatency(bedrockStatus);
+        const [javaProbe, bedrockProbe] = await Promise.all([
+            javaStatus.online ? measurePlayerPing({ ...splitTarget(javaStatus.target), protocol: 'TCP' }) : null,
+            bedrockStatus.online ? measurePlayerPing({ host: config.minecraft.bedrockIp.trim(), protocol: 'ICMP' }) : null
+        ]);
+        logProbeFailure('/ping', 'Java', javaProbe);
+        logProbeFailure('/ping', 'Bedrock', bedrockProbe);
+
+        const javaStatusText = formatPlayerPing(javaStatus, javaProbe);
+        const bedrockStatusText = formatPlayerPing(bedrockStatus, bedrockProbe);
+        const probeCountry = getProbeCountry();
+        const location = probeCountry ? ` (${describeCountry(probeCountry)})` : '';
 
         const embed = createEmbed({
             type: (javaStatus.online || bedrockStatus.online) ? 'success' : 'warning',
@@ -37,8 +55,8 @@ module.exports = {
                 { name: 'Bot Latency', value: `${botLatency} ms`, inline: true },
                 { name: 'API Latency', value: apiLatency, inline: true },
                 { name: '\u200B', value: '\u200B', inline: true },
-                { name: 'Java Ping', value: javaStatusText, inline: true },
-                { name: 'Bedrock Ping', value: bedrockStatusText, inline: true }
+                { name: `Java Ping${location}`, value: javaStatusText, inline: true },
+                { name: `Bedrock Ping${location}`, value: bedrockStatusText, inline: true }
             ]
         });
 
