@@ -37,7 +37,6 @@ Discord bot for Minecraft crossplay (Java + Bedrock) server management and commu
 | `minecraft.bedrockIp` | Bedrock server address shown to players. If it is not a valid host name (for example a placeholder text), Bedrock checks are skipped |
 | `minecraft.bedrockPort` | Bedrock server port, defaults to `19132` |
 | `minecraft.bedrockPingHost`, `minecraft.bedrockPingPort` | Optional address and port used only for the Bedrock status check, for when the public one is not reachable from the bot's machine |
-| `minecraft.pingCountry` | Optional, defaults to `IT`. Country of the probes used by `/ping` to estimate the latency players see. Set it to an empty string to disable |
 | `minecraft.bedrockPrefix` | Optional Floodgate username prefix, defaults to `.` |
 | `rcon.host`, `rcon.port` | RCON connection |
 
@@ -49,8 +48,8 @@ General:
 | --- | --- |
 | `/help` | Lists the commands available to the user |
 | `/ip` | Shows the connection addresses |
-| `/ping` | Shows bot latency and an estimate of the latency from `pingCountry`, measured by external Globalping probes. It is a lower bound: it does not include the last mile of a home connection |
-| `/status` | Shows server status, players and version |
+| `/ping` | Shows the latency of the bot and of the Discord API |
+| `/status` | Shows server status, players and version. Bedrock is checked directly by the bot and, if the bot gets no answer, from the internet through mcstatus.io, so the result reflects what players can reach |
 | `/players` | Shows the players currently online |
 
 Admin:

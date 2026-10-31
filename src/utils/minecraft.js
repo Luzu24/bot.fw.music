@@ -7,9 +7,11 @@ const dgram = require('dgram');
 const { Resolver } = require('dns').promises;
 const config = require('../../config.json');
 const logger = require('./logger');
+const { fetchExternalBedrockStatus } = require('./mcstatus');
 
 const DEFAULT_TIMEOUT = 3000;
 const SRV_LOOKUP_TIMEOUT = 2000;
+const BEDROCK_STATUS_CACHE_TTL = 30 * 1000;
 const HOSTNAME_PATTERN = /^[A-Za-z0-9.-]+$/;
 const DEFAULT_JAVA_PORT = 25565;
 const DEFAULT_BEDROCK_PORT = 19132;
@@ -121,9 +123,7 @@ const requestJavaStatus = ({ originalHost, connectHost, connectPort, target, tim
     let buffer = Buffer.alloc(0);
     let status = null;
     let startedAt = 0;
-    let pingSentAt = 0;
     let statusLatency = null;
-    let pongLatency = null;
     let settled = false;
 
     const finish = (failure) => {
@@ -136,7 +136,7 @@ const requestJavaStatus = ({ originalHost, connectHost, connectPort, target, tim
             return;
         }
 
-        resolve({ online: true, latency: pongLatency ?? statusLatency, target, ...status });
+        resolve({ online: true, latency: statusLatency, target, ...status });
     };
 
     const handlePacket = (packet) => {
@@ -157,16 +157,6 @@ const requestJavaStatus = ({ originalHost, connectHost, connectPort, target, tim
 
             status = parsedStatus;
             statusLatency = now() - startedAt;
-
-            const payload = Buffer.alloc(8);
-            payload.writeBigInt64BE(BigInt(Date.now()));
-            pingSentAt = now();
-            socket.write(createPacket(0x01, payload));
-            return;
-        }
-
-        if (id.value === 0x01) {
-            pongLatency = now() - pingSentAt;
             finish();
         }
     };
@@ -285,9 +275,51 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
     });
 };
 
+let bedrockStatusCache = null;
+
+const resolveBedrockStatus = async () => {
+    const local = await pingBedrock();
+    if (local.online) return { ...local, source: 'local' };
+    if (local.error === 'NOT_CONFIGURED') return local;
+
+    const host = String(config.minecraft.bedrockIp).trim();
+    const port = parseInt(config.minecraft.bedrockPort, 10) || DEFAULT_BEDROCK_PORT;
+    const external = await fetchExternalBedrockStatus({ host, port });
+
+    if (external.error) return { ...local, external: 'unavailable' };
+    if (!external.online) return { ...local, external: 'offline' };
+
+    return {
+        online: true,
+        latency: null,
+        target: `${host}:${port}`,
+        source: 'external',
+        localError: local.error,
+        players: external.players,
+        version: external.version,
+        motd: external.motd
+    };
+};
+
+const getBedrockStatus = ({ fresh = false } = {}) => {
+    if (!fresh && bedrockStatusCache && Date.now() - bedrockStatusCache.at < BEDROCK_STATUS_CACHE_TTL) {
+        return bedrockStatusCache.promise;
+    }
+
+    bedrockStatusCache = { at: Date.now(), promise: resolveBedrockStatus() };
+    return bedrockStatusCache.promise;
+};
+
 const logPingFailure = (source, name, status) => {
+    if (status.online && status.source === 'external') {
+        logger.warn(`${source}: ${name} does not answer the bot directly (${status.localError}) but is online from the internet.`);
+        return;
+    }
+
     if (status.online || status.error === 'NOT_CONFIGURED') return;
-    logger.warn(`${source}: ${name} check failed at ${status.target}: ${status.error}.`);
+
+    const external = status.external ? ` (external check: ${status.external})` : '';
+    logger.warn(`${source}: ${name} check failed at ${status.target}: ${status.error}${external}.`);
 };
 
 const getBedrockPrefix = () => config.minecraft?.bedrockPrefix || DEFAULT_BEDROCK_PREFIX;
@@ -322,6 +354,7 @@ const parseWhitelist = (response) => {
 module.exports = {
     pingJava,
     pingBedrock,
+    getBedrockStatus,
     logPingFailure,
     getBanTarget,
     getWhitelistCommand,

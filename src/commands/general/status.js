@@ -5,7 +5,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const config = require('../../../config.json');
 const { createEmbed } = require('../../utils/embedBuilder');
-const { pingJava, pingBedrock, logPingFailure } = require('../../utils/minecraft');
+const { pingJava, getBedrockStatus, logPingFailure } = require('../../utils/minecraft');
 
 const formatServerStatus = (status) => {
     if (status.error === 'NOT_CONFIGURED') return ':white_circle: Non disponibile';
@@ -25,7 +25,7 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
 
-        const [javaStatus, bedrockStatus] = await Promise.all([pingJava(), pingBedrock()]);
+        const [javaStatus, bedrockStatus] = await Promise.all([pingJava(), getBedrockStatus()]);
         logPingFailure('/status', 'Java', javaStatus);
         logPingFailure('/status', 'Bedrock', bedrockStatus);
 

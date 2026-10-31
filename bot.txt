@@ -44,6 +44,7 @@ bot/
 │   │   ├── embedBuilder.js
 │   │   ├── formatters.js
 │   │   ├── logger.js
+│   │   ├── mcstatus.js
 │   │   ├── minecraft.js
 │   │   ├── nickname.js
 │   │   ├── permissions.js
