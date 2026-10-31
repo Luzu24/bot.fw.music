@@ -1,3 +1,7 @@
+/**
+ * Utility module for checking Bedrock server status from the internet through mcstatus.io.
+ */
+
 const API_URL = 'https://api.mcstatus.io/v2/status/bedrock';
 const REQUEST_TIMEOUT = 4000;
 const SUCCESS_CACHE_TTL = 60 * 1000;
