@@ -67,17 +67,38 @@ const runMeasurement = async ({ host, port, protocol, country, pollInterval, max
         const measurement = await requestJson(`${API_URL}/${created.id}`);
 
         if (measurement.status === 'finished') {
-            const averages = (measurement.results || [])
-                .map(entry => entry.result?.stats?.avg)
-                .filter(value => Number.isFinite(value));
+            const details = (measurement.results || [])
+                .map(entry => ({
+                    avg: entry.result?.stats?.avg,
+                    city: entry.probe?.city,
+                    asn: entry.probe?.asn,
+                    network: entry.probe?.network,
+                    address: entry.result?.resolvedAddress
+                }))
+                .filter(detail => Number.isFinite(detail.avg));
 
-            if (averages.length === 0) throw new Error('no probe could reach the target');
+            if (details.length === 0) throw new Error('no probe could reach the target');
 
-            return { latency: Math.round(median(averages) * 10) / 10, country, probes: averages.length };
+            return {
+                latency: Math.round(median(details.map(detail => detail.avg)) * 10) / 10,
+                country,
+                probes: details.length,
+                details,
+                resolvedAddress: details.find(detail => detail.address)?.address || null
+            };
         }
     }
 
     throw new Error('timed out waiting for the probes');
+};
+
+const describeMeasurement = ({ host, port, protocol, country }, result) => {
+    const probes = result.details
+        .map(detail => `${detail.city || '?'}${detail.asn ? ` AS${detail.asn}` : ''}${detail.network ? ` ${detail.network}` : ''} ${Math.round(detail.avg * 10) / 10} ms`)
+        .join(' | ');
+    const resolved = result.resolvedAddress ? ` (resolved ${result.resolvedAddress})` : '';
+
+    return `Player ping probe ${protocol} ${host}${port ? `:${port}` : ''} from ${country}${resolved}: ${probes} -> ${result.latency} ms.`;
 };
 
 const measurePlayerPing = ({ host, port, protocol = 'TCP', country = getProbeCountry(), pollInterval = POLL_INTERVAL, maxWait = MAX_WAIT }) => {
@@ -89,6 +110,10 @@ const measurePlayerPing = ({ host, port, protocol = 'TCP', country = getProbeCou
 
     const entry = { at: Date.now(), ttl: SUCCESS_CACHE_TTL, promise: null };
     entry.promise = runMeasurement({ host, port, protocol, country, pollInterval, maxWait })
+        .then((result) => {
+            logger.info(describeMeasurement({ host, port, protocol, country }, result));
+            return result;
+        })
         .catch((error) => {
             entry.ttl = FAILURE_CACHE_TTL;
             return { error: error.message };

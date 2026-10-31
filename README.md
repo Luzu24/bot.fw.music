@@ -49,7 +49,7 @@ General:
 | --- | --- |
 | `/help` | Lists the commands available to the user |
 | `/ip` | Shows the connection addresses |
-| `/ping` | Shows bot latency and the estimated player latency, measured from external probes in `pingCountry` (via Globalping) |
+| `/ping` | Shows bot latency and an estimate of the latency from `pingCountry`, measured by external Globalping probes. It is a lower bound: it does not include the last mile of a home connection |
 | `/status` | Shows server status, players and version |
 | `/players` | Shows the players currently online |
 

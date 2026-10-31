@@ -46,7 +46,7 @@ module.exports = {
         const javaStatusText = formatPlayerPing(javaStatus, javaProbe);
         const bedrockStatusText = formatPlayerPing(bedrockStatus, bedrockProbe);
         const probeCountry = getProbeCountry();
-        const location = probeCountry ? ` (${describeCountry(probeCountry)})` : '';
+        const location = probeCountry ? ` (stima, ${describeCountry(probeCountry)})` : '';
 
         const embed = createEmbed({
             type: (javaStatus.online || bedrockStatus.online) ? 'success' : 'warning',
