@@ -49,7 +49,7 @@ General:
 | `/help` | Lists the commands available to the user |
 | `/ip` | Shows the connection addresses |
 | `/ping` | Shows the latency of the bot and of the Discord API |
-| `/status` | Shows server status, players and version. Bedrock is checked directly by the bot and, if the bot gets no answer, from the internet through mcstatus.io, so the result reflects what players can reach |
+| `/status` | Shows server status, players and version. Bedrock is checked directly by the bot and, if the bot gets no answer, from the internet through mcstatus.io and mcsrvstat.us, so the result reflects what players can reach. The result is refreshed every minute |
 | `/players` | Shows the players currently online |
 
 Admin:

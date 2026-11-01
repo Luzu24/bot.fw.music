@@ -11,7 +11,8 @@ const { fetchExternalBedrockStatus } = require('./mcstatus');
 
 const DEFAULT_TIMEOUT = 3000;
 const SRV_LOOKUP_TIMEOUT = 2000;
-const BEDROCK_STATUS_CACHE_TTL = 30 * 1000;
+const BEDROCK_STATUS_CACHE_TTL = 90 * 1000;
+const EXTERNAL_START_DELAY = 1000;
 const HOSTNAME_PATTERN = /^[A-Za-z0-9.-]+$/;
 const DEFAULT_JAVA_PORT = 25565;
 const DEFAULT_BEDROCK_PORT = 19132;
@@ -278,22 +279,33 @@ const pingBedrock = ({ host, port, timeout } = {}) => {
 let bedrockStatusCache = null;
 
 const resolveBedrockStatus = async () => {
-    const local = await pingBedrock();
-    if (local.online) return { ...local, source: 'local' };
-    if (local.error === 'NOT_CONFIGURED') return local;
+    const host = String(config.minecraft.bedrockIp || '').trim();
+    if (!isValidHost(host)) return pingBedrock();
 
-    const host = String(config.minecraft.bedrockIp).trim();
     const port = parseInt(config.minecraft.bedrockPort, 10) || DEFAULT_BEDROCK_PORT;
-    const external = await fetchExternalBedrockStatus({ host, port });
+    const queryExternal = () => fetchExternalBedrockStatus({ host, port });
 
-    if (external.error) return { ...local, external: 'unavailable' };
-    if (!external.online) return { ...local, external: 'offline' };
+    let earlyExternal = null;
+    const timer = setTimeout(() => {
+        earlyExternal = queryExternal();
+    }, EXTERNAL_START_DELAY);
+
+    const local = await pingBedrock();
+    clearTimeout(timer);
+
+    if (local.online) return { ...local, source: 'local' };
+
+    const external = await (earlyExternal || queryExternal());
+
+    if (external.error) return { ...local, external: 'unavailable', externalError: external.error };
+    if (!external.online) return { ...local, external: 'offline', externalSource: external.source };
 
     return {
         online: true,
         latency: null,
         target: `${host}:${port}`,
         source: 'external',
+        externalSource: external.source,
         localError: local.error,
         players: external.players,
         version: external.version,
@@ -310,16 +322,22 @@ const getBedrockStatus = ({ fresh = false } = {}) => {
     return bedrockStatusCache.promise;
 };
 
+const formatExternalCheck = (status) => {
+    if (!status.external) return '';
+    return status.external === 'unavailable'
+        ? ` (external check: unavailable: ${status.externalError})`
+        : ` (external check: ${status.external})`;
+};
+
 const logPingFailure = (source, name, status) => {
     if (status.online && status.source === 'external') {
-        logger.warn(`${source}: ${name} does not answer the bot directly (${status.localError}) but is online from the internet.`);
+        logger.warn(`${source}: ${name} does not answer the bot directly (${status.localError}) but is online from the internet (${status.externalSource}).`);
         return;
     }
 
     if (status.online || status.error === 'NOT_CONFIGURED') return;
 
-    const external = status.external ? ` (external check: ${status.external})` : '';
-    logger.warn(`${source}: ${name} check failed at ${status.target}: ${status.error}${external}.`);
+    logger.warn(`${source}: ${name} check failed at ${status.target}: ${status.error}${formatExternalCheck(status)}.`);
 };
 
 const getBedrockPrefix = () => config.minecraft?.bedrockPrefix || DEFAULT_BEDROCK_PREFIX;
@@ -355,6 +373,7 @@ module.exports = {
     pingJava,
     pingBedrock,
     getBedrockStatus,
+    formatExternalCheck,
     logPingFailure,
     getBanTarget,
     getWhitelistCommand,

@@ -5,7 +5,7 @@
 const { ActivityType } = require('discord.js');
 const logger = require('../../utils/logger');
 const config = require('../../../config.json');
-const { pingJava, getBedrockStatus } = require('../../utils/minecraft');
+const { pingJava, getBedrockStatus, formatExternalCheck } = require('../../utils/minecraft');
 
 const ACTIVITY_REFRESH_INTERVAL = 60000;
 
@@ -26,19 +26,19 @@ module.exports = {
             serverStates[name] = state;
 
             if (status.online && status.source === 'external') {
-                logger.warn(`${name} server is online from the internet but does not answer the bot directly (${status.localError}).`, client);
+                logger.warn(`${name} server is online from the internet but does not answer the bot directly (${status.localError}, confirmed by ${status.externalSource}).`, client);
             } else if (status.online) {
                 logger.info(`${name} server is reachable at ${status.target}.`, client);
             } else if (status.error === 'NOT_CONFIGURED') {
                 logger.info(`${name} server address is not configured: status checks are skipped.`);
             } else {
-                logger.warn(`${name} server is unreachable at ${status.target}: ${status.error}${status.external ? ` (external check: ${status.external})` : ''}.`, client);
+                logger.warn(`${name} server is unreachable at ${status.target}: ${status.error}${formatExternalCheck(status)}.`, client);
             }
         };
 
         const updateActivity = async () => {
             try {
-                const [status, bedrockStatus] = await Promise.all([pingJava(), getBedrockStatus()]);
+                const [status, bedrockStatus] = await Promise.all([pingJava(), getBedrockStatus({ fresh: true })]);
                 logServerState('Java', status);
                 logServerState('Bedrock', bedrockStatus);
                 const statusText = status.online && status.players
